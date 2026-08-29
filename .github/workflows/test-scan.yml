@@ -1,0 +1,37 @@
+name: Test Nialame Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Nialame Action image
+        run: docker build -f packages/github-action/Dockerfile -t nialame-action .
+
+      - name: Run scan on demo vulnerable project
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace \
+            -e GITHUB_WORKSPACE=/workspace \
+            -e GITHUB_OUTPUT=/workspace/gh_output.txt \
+            nialame-action \
+            --fail-on=critical \
+            --paths="examples/vulnerable-python-project/*.py"
+
+      - name: Show SARIF report
+        if: always()
+        run: cat nialame-results.sarif
+
+      - name: Upload SARIF artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nialame-sarif-report
+          path: nialame-results.sarif

@@ -1,0 +1,26 @@
+name: Nialame Security Scan
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  nialame:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: nialame/nialame-action@0000000000000000000000000000000000000000 # à épingler sur le SHA de release réel
+        id: scan
+        with:
+          fail-on: critical
+          upload-sarif: true
+          llm-enabled: false
+      - uses: github/codeql-action/upload-sarif@f09c1c0a94de965c15400f5634aa42fac8fb8f88 # v3.27.5
+        if: always()
+        with:
+          sarif_file: ${{ steps.scan.outputs.sarif-path }}

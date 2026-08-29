@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.env
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Node / TypeScript
+node_modules/
+out/
+dist/
+*.vsix
+.vscode-test/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+
+# Nialame runtime
+*.sarif
+.nialame-cache/

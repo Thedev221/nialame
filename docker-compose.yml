@@ -1,0 +1,34 @@
+version: "3.9"
+
+services:
+  core-engine:
+    build:
+      context: ./packages/core-engine
+    image: nialame/core-engine:local
+    container_name: nialame-core-engine
+    env_file:
+      - ./packages/core-engine/.env.example
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+    networks:
+      - nialame-net
+
+  github-app:
+    build:
+      context: ./packages/github-app
+    image: nialame/github-app:local
+    container_name: nialame-github-app
+    env_file:
+      - ./packages/github-app/.env.example
+    depends_on:
+      - core-engine
+    ports:
+      - "127.0.0.1:8080:8080"
+    restart: unless-stopped
+    networks:
+      - nialame-net
+
+networks:
+  nialame-net:
+    driver: bridge

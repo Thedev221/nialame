@@ -1,0 +1,76 @@
+{
+  "name": "nialame-ai",
+  "displayName": "Nialame AI",
+  "description": "Copilote de sécurité applicative — scan déterministe, chat contextuel, revue de code, patchs revus par un humain.",
+  "version": "0.1.0",
+  "publisher": "nialame",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": ["Linters", "Programming Languages", "Machine Learning"],
+  "activationEvents": [
+    "onLanguage:python"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "nialame.openChat", "title": "Nialame: Open Chat" },
+      { "command": "nialame.scanCurrentFile", "title": "Nialame: Scan Current File" },
+      { "command": "nialame.scanWorkspace", "title": "Nialame: Scan Workspace" },
+      { "command": "nialame.explainSelection", "title": "Nialame: Explain Selected Code" },
+      { "command": "nialame.explainError", "title": "Nialame: Explain Error" },
+      { "command": "nialame.fixFinding", "title": "Nialame: Fix Selected Finding" },
+      { "command": "nialame.reviewGitChanges", "title": "Nialame: Review Git Changes" },
+      { "command": "nialame.openSettings", "title": "Nialame: Open Settings" }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "nialame-activitybar",
+          "title": "Nialame AI",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "nialame-activitybar": [
+        {
+          "type": "webview",
+          "id": "nialame.chatView",
+          "name": "Chat"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Nialame AI",
+      "properties": {
+        "nialame.coreEngineUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8000",
+          "description": "URL du Core Engine local."
+        },
+        "nialame.allowLlm": {
+          "type": "boolean",
+          "default": false,
+          "description": "Autoriser le Core Engine à consulter un LLM (Tier 2). Désactivé par défaut."
+        },
+        "nialame.scanOnSaveDebounceMs": {
+          "type": "number",
+          "default": 800,
+          "description": "Délai de debounce (ms) avant de lancer un scan après sauvegarde."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "node ./out/tests/runTests.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.5.0"
+  }
+}

@@ -1,0 +1,136 @@
+body {
+  font-family: var(--vscode-font-family);
+  color: var(--vscode-foreground);
+  background-color: var(--vscode-editor-background);
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.privacy-banner {
+  font-size: 11px;
+  padding: 4px 8px;
+  background-color: var(--vscode-editorWidget-background);
+  border-bottom: 1px solid var(--vscode-widget-border);
+  color: var(--vscode-descriptionForeground);
+}
+
+#mode-scope-bar {
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--vscode-widget-border);
+}
+
+#mode-scope-bar select {
+  flex: 1;
+  background-color: var(--vscode-dropdown-background);
+  color: var(--vscode-dropdown-foreground);
+  border: 1px solid var(--vscode-dropdown-border);
+}
+
+#messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.message {
+  margin-bottom: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  line-height: 1.4;
+}
+
+.message-user {
+  background-color: var(--vscode-inputOption-activeBackground);
+}
+
+.message-assistant {
+  background-color: var(--vscode-editorWidget-background);
+}
+
+.message-error {
+  background-color: var(--vscode-inputValidation-errorBackground);
+  color: var(--vscode-inputValidation-errorForeground);
+}
+
+.finding-card {
+  border-left: 4px solid var(--vscode-widget-border);
+  background-color: var(--vscode-editorWidget-background);
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+}
+
+.finding-card.severity-critical { border-left-color: #e34d4d; }
+.finding-card.severity-high { border-left-color: #e37b4d; }
+.finding-card.severity-medium { border-left-color: #e3c34d; }
+.finding-card.severity-low { border-left-color: #7bb0e3; }
+.finding-card.severity-info { border-left-color: #9aa0a6; }
+
+.finding-header {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.finding-message {
+  margin: 4px 0;
+  font-size: 12px;
+}
+
+.finding-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.finding-actions button {
+  font-size: 11px;
+  background-color: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  border: none;
+  border-radius: 3px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+#input-bar {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--vscode-widget-border);
+}
+
+#chat-input {
+  flex: 1;
+  resize: none;
+  min-height: 40px;
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+}
+
+#send-button, #cancel-button {
+  background-color: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+  border: none;
+  border-radius: 4px;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+pre {
+  background-color: var(--vscode-textCodeBlock-background);
+  padding: 8px;
+  overflow-x: auto;
+  border-radius: 4px;
+}
+
+code {
+  font-family: var(--vscode-editor-font-family);
+}

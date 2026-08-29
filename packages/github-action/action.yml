@@ -1,0 +1,39 @@
+name: "Nialame Security Scan"
+description: "Scan de sécurité applicative déterministe (AST) pour pull requests, avec rapport SARIF."
+author: "Nialame AI"
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  fail-on:
+    description: "Sévérité minimale qui fait échouer le job (critical, high, medium, low, info, none)."
+    required: false
+    default: "critical"
+  upload-sarif:
+    description: "Publier le rapport SARIF via github/codeql-action/upload-sarif."
+    required: false
+    default: "true"
+  llm-enabled:
+    description: "Autoriser un appel LLM (Tier 2) pendant le scan CI. Désactivé par défaut."
+    required: false
+    default: "false"
+  paths:
+    description: "Glob des fichiers à analyser, relatif à la racine du dépôt."
+    required: false
+    default: "**/*.py"
+
+outputs:
+  sarif-path:
+    description: "Chemin du fichier SARIF généré."
+  findings-count:
+    description: "Nombre total de findings détectés."
+
+runs:
+  using: "docker"
+  image: "Dockerfile"
+  args:
+    - "--fail-on=${{ inputs.fail-on }}"
+    - "--upload-sarif=${{ inputs.upload-sarif }}"
+    - "--llm-enabled=${{ inputs.llm-enabled }}"
+    - "--paths=${{ inputs.paths }}"

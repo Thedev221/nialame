@@ -26,11 +26,3 @@ def load_cached_session(raw_bytes: bytes):
 def evaluate_user_formula(formula: str):
     # NIA-EVAL-001 attendu : eval sur une entrée utilisateur.
     return eval(formula)
-
-def another_test(cmd):
-    os.system(cmd)
-
-def another_test(cmd):
-    os.system(cmd)
-#test
- 

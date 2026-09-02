@@ -49,6 +49,36 @@ def test_detects_eval():
     assert any(f.rule_id == "NIA-EVAL-001" for f in findings)
 
 
+def test_detects_weak_hash_md5():
+    source = "import hashlib\n\ndef hash_password(pw):\n    return hashlib.md5(pw.encode()).hexdigest()\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-CRYPTO-001" for f in findings)
+
+
+def test_detects_weak_hash_sha1():
+    source = "import hashlib\n\ndef sign(data):\n    return hashlib.sha1(data).hexdigest()\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-CRYPTO-001" for f in findings)
+
+
+def test_no_false_positive_on_strong_hash():
+    source = "import hashlib\n\ndef hash_password(pw):\n    return hashlib.sha256(pw.encode()).hexdigest()\n"
+    findings = scan_python_source(source)
+    assert not any(f.rule_id == "NIA-CRYPTO-001" for f in findings)
+
+
+def test_detects_subprocess_popen():
+    source = "import subprocess\n\ndef run(cmd):\n    subprocess.Popen(cmd, shell=True)\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-CMD-003" for f in findings)
+
+
+def test_detects_unverified_tls_context():
+    source = "import ssl\n\ndef make_context():\n    return ssl._create_unverified_context()\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-TLS-001" for f in findings)
+
+
 def test_no_false_positive_on_safe_code():
     source = (
         "def add(a, b):\n"

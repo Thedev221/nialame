@@ -50,11 +50,35 @@ _DANGEROUS_CALLS: dict[str, dict[str, str]] = {
         "severity": Severity.CRITICAL,
         "message": "Utilisation de exec() sur une entrée potentiellement contrôlée par l'utilisateur.",
     },
-    "django.utils.safestring.mark_safe": {
+        "django.utils.safestring.mark_safe": {
         "rule_id": "NIA-XSS-001",
         "cwe": "CWE-79",
         "severity": Severity.HIGH,
         "message": "mark_safe désactive l'échappement automatique — risque de XSS si la chaîne contient une entrée utilisateur.",
+    },
+    "hashlib.md5": {
+        "rule_id": "NIA-CRYPTO-001",
+        "cwe": "CWE-327",
+        "severity": Severity.MEDIUM,
+        "message": "Algorithme de hachage cryptographiquement faible (MD5) — ne pas l'utiliser pour des mots de passe ou signatures.",
+    },
+    "hashlib.sha1": {
+        "rule_id": "NIA-CRYPTO-001",
+        "cwe": "CWE-327",
+        "severity": Severity.MEDIUM,
+        "message": "Algorithme de hachage cryptographiquement affaibli (SHA-1) — préférer SHA-256 ou supérieur.",
+    },
+    "subprocess.Popen": {
+        "rule_id": "NIA-CMD-003",
+        "cwe": "CWE-78",
+        "severity": Severity.MEDIUM,
+        "message": "Appel subprocess.Popen — vérifier shell=False et l'absence d'interpolation de chaîne dans la commande.",
+    },
+    "ssl._create_unverified_context": {
+        "rule_id": "NIA-TLS-001",
+        "cwe": "CWE-295",
+        "severity": Severity.HIGH,
+        "message": "Désactive la vérification de certificat TLS — expose à des attaques de type man-in-the-middle.",
     },
 }
 

@@ -20,6 +20,15 @@ _DANGEROUS_CALLS: dict[str, dict[str, str]] = {
         "severity": Severity.HIGH,
         "message": "Désérialisation non sûre via pickle.loads sur une donnée potentiellement non fiable.",
     },
+    "pickle.load": {
+        "rule_id": "NIA-DESER-001",
+        "cwe": "CWE-502",
+        "severity": Severity.HIGH,
+        "message": (
+            "Désérialisation non sûre via pickle.load : un fichier ou flux non fiable "
+            "peut contenir des données déclenchant l’exécution de code."
+        ),
+    },
     "yaml.load": {
         "rule_id": "NIA-DESER-002",
         "cwe": "CWE-502",

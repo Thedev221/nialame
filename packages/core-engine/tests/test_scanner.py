@@ -36,6 +36,17 @@ def test_detects_pickle_loads():
     findings = scan_python_source(source)
     assert any(f.rule_id == "NIA-DESER-001" for f in findings)
 
+def test_detects_pickle_load():
+    source = (
+        "import pickle\n\n"
+        "def load(file):\n"
+        "    return pickle.load(file)\n"
+    )
+
+    findings = scan_python_source(source)
+
+    assert any(f.rule_id == "NIA-DESER-001" for f in findings)
+
 
 def test_detects_os_system():
     source = "import os\n\ndef run(cmd):\n    os.system(cmd)\n"

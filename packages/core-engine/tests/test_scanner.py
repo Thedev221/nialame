@@ -90,6 +90,74 @@ def test_detects_unverified_tls_context():
     assert any(f.rule_id == "NIA-TLS-001" for f in findings)
 
 
+def test_detects_os_popen():
+    source = "import os\n\ndef run(cmd):\n    return os.popen(cmd)\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-CMD-004" for f in findings)
+
+
+def test_detects_pickle_load():
+    source = "import pickle\n\ndef load(f):\n    return pickle.load(f)\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-DESER-001" for f in findings)
+
+
+def test_detects_xxe_fromstring():
+    # NOTE: le scanner ne résout pas encore les alias d'import
+    # (ex. `import ... as ET`) — limitation connue, backlog futur.
+    source = "import xml.etree.ElementTree\n\ndef parse(data):\n    return xml.etree.ElementTree.fromstring(data)\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-XXE-001" for f in findings)
+
+
+def test_detects_insecure_mktemp():
+    source = "import tempfile\n\ndef make_temp():\n    return tempfile.mktemp()\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-TMPFILE-001" for f in findings)
+
+
+def test_detects_yaml_unsafe_load():
+    source = "import yaml\n\ndef load(data):\n    return yaml.unsafe_load(data)\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-DESER-003" for f in findings)
+
+
+def test_detects_marshal_loads():
+    source = "import marshal\n\ndef load(data):\n    return marshal.loads(data)\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-DESER-004" for f in findings)
+
+
+def test_detects_jsonpickle_decode():
+    source = "import jsonpickle\n\ndef load(data):\n    return jsonpickle.decode(data)\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-DESER-005" for f in findings)
+
+
+def test_detects_paramiko_auto_add_policy():
+    source = "import paramiko\n\ndef connect(client):\n    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-SSH-001" for f in findings)
+
+
+def test_detects_weak_cipher_des():
+    source = "from Crypto.Cipher import DES\n\ndef encrypt(key):\n    return DES.new(key)\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-CRYPTO-002" for f in findings)
+
+
+def test_detects_weak_cipher_rc4():
+    source = "from Crypto.Cipher import ARC4\n\ndef encrypt(key):\n    return ARC4.new(key)\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-CRYPTO-002" for f in findings)
+
+
+def test_detects_deprecated_ssl_wrap_socket():
+    source = "import ssl\n\ndef wrap(sock):\n    return ssl.wrap_socket(sock)\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-TLS-002" for f in findings)
+
+
 def test_no_false_positive_on_safe_code():
     source = (
         "def add(a, b):\n"

@@ -83,11 +83,77 @@ _DANGEROUS_CALLS: dict[str, dict[str, str]] = {
         "severity": Severity.MEDIUM,
         "message": "Appel subprocess.Popen — vérifier shell=False et l'absence d'interpolation de chaîne dans la commande.",
     },
-    "ssl._create_unverified_context": {
+        "ssl._create_unverified_context": {
         "rule_id": "NIA-TLS-001",
         "cwe": "CWE-295",
         "severity": Severity.HIGH,
         "message": "Désactive la vérification de certificat TLS — expose à des attaques de type man-in-the-middle.",
+    },
+    "os.popen": {
+        "rule_id": "NIA-CMD-004",
+        "cwe": "CWE-78",
+        "severity": Severity.CRITICAL,
+        "message": "Exécution de commande shell via os.popen — risque d'injection de commande.",
+    },
+    "pickle.load": {
+        "rule_id": "NIA-DESER-001",
+        "cwe": "CWE-502",
+        "severity": Severity.HIGH,
+        "message": "Désérialisation non sûre via pickle.load sur une donnée potentiellement non fiable.",
+    },
+    "xml.etree.ElementTree.fromstring": {
+        "rule_id": "NIA-XXE-001",
+        "cwe": "CWE-611",
+        "severity": Severity.HIGH,
+        "message": "Parsing XML potentiellement vulnérable aux attaques XXE (XML External Entity) sur une entrée non fiable.",
+    },
+        "tempfile.mktemp": {
+        "rule_id": "NIA-TMPFILE-001",
+        "cwe": "CWE-377",
+        "severity": Severity.MEDIUM,
+        "message": "tempfile.mktemp crée un nom de fichier sans le créer atomiquement — condition de course exploitable. Utiliser tempfile.mkstemp ou NamedTemporaryFile.",
+    },
+    "yaml.unsafe_load": {
+        "rule_id": "NIA-DESER-003",
+        "cwe": "CWE-502",
+        "severity": Severity.HIGH,
+        "message": "yaml.unsafe_load exécute explicitement du code arbitraire caché dans un fichier YAML.",
+    },
+    "marshal.loads": {
+        "rule_id": "NIA-DESER-004",
+        "cwe": "CWE-502",
+        "severity": Severity.HIGH,
+        "message": "marshal.loads désérialise des données non fiables — risque d'exécution de code arbitraire.",
+    },
+    "jsonpickle.decode": {
+        "rule_id": "NIA-DESER-005",
+        "cwe": "CWE-502",
+        "severity": Severity.HIGH,
+        "message": "jsonpickle.decode peut désérialiser des objets Python arbitraires depuis une donnée non fiable.",
+    },
+    "paramiko.AutoAddPolicy": {
+        "rule_id": "NIA-SSH-001",
+        "cwe": "CWE-295",
+        "severity": Severity.HIGH,
+        "message": "AutoAddPolicy accepte aveuglément n'importe quelle clé d'hôte SSH — expose à une attaque man-in-the-middle.",
+    },
+        "DES.new": {
+        "rule_id": "NIA-CRYPTO-002",
+        "cwe": "CWE-327",
+        "severity": Severity.MEDIUM,
+        "message": "DES est un algorithme de chiffrement cryptographiquement cassé — utiliser AES à la place.",
+    },
+    "ARC4.new": {
+        "rule_id": "NIA-CRYPTO-002",
+        "cwe": "CWE-327",
+        "severity": Severity.MEDIUM,
+        "message": "RC4 est un algorithme de chiffrement cryptographiquement cassé — utiliser AES à la place.",
+    },
+    "ssl.wrap_socket": {
+        "rule_id": "NIA-TLS-002",
+        "cwe": "CWE-295",
+        "severity": Severity.MEDIUM,
+        "message": "ssl.wrap_socket est déprécié et ne valide pas correctement les certificats — utiliser ssl.SSLContext.",
     },
 }
 

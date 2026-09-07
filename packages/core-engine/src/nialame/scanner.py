@@ -8,6 +8,7 @@ sûre, exécution de code dynamique, etc.
 from __future__ import annotations
 
 import ast
+import re
 from dataclasses import dataclass
 
 from nialame.models import Confidence, Finding, Range, Severity
@@ -258,8 +259,207 @@ class _SqlConcatVisitor(ast.NodeVisitor):
         if _looks_like_sql(literal_parts) and any(isinstance(v, ast.FormattedValue) for v in node.values):
             self.hits.append((node, self._current_symbol()))
         self.generic_visit(node)
+_SECRET_NAME_HINTS_SCANNER = re.compile(
+    r"(?i)^(?:.*_)?(password|passwd|secret|token|api[_-]?key|private[_-]?key|credential)s?$"
+)
 
 
+class _SecuritySensitiveAssignVisitor(ast.NodeVisitor):
+    """Détecte trois motifs distincts sur les assignations :
+    secrets codés en dur, aléatoire faible pour un usage sécuritaire,
+    et mode debug activé (Django DEBUG = True)."""
+
+    def __init__(self) -> None:
+        self.hits: list[tuple[str, ast.AST, str | None]] = []
+        self._stack: list[str] = []
+
+    def _current_symbol(self) -> str | None:
+        return self._stack[-1] if self._stack else None
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # noqa: N802
+        self._stack.append(node.name)
+        self.generic_visit(node)
+        self._stack.pop()
+
+    visit_AsyncFunctionDef = visit_FunctionDef  # type: ignore[assignment]
+
+    def visit_Assign(self, node: ast.Assign) -> None:  # noqa: N802
+        for target in node.targets:
+            if not isinstance(target, ast.Name):
+                continue
+
+            if target.id == "DEBUG" and isinstance(node.value, ast.Constant) and node.value.value is True:
+                self.hits.append(("debug", node, self._current_symbol()))
+                continue
+
+            if not _SECRET_NAME_HINTS_SCANNER.match(target.id):
+                continue
+
+            if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                self.hits.append(("secret", node, self._current_symbol()))
+            elif isinstance(node.value, ast.Call):
+                qualified = _qualified_call_name(node.value)
+                if qualified in {"random.random", "random.randint", "random.choice", "random.uniform"}:
+                    self.hits.append(("weak_random", node, self._current_symbol()))
+
+        self.generic_visit(node)
+
+
+class _TimingUnsafeComparisonVisitor(ast.NodeVisitor):
+    """Détecte une comparaison == sur une variable au nom évocateur d'un secret."""
+
+    def __init__(self) -> None:
+        self.hits: list[tuple[ast.AST, str | None]] = []
+        self._stack: list[str] = []
+
+    def _current_symbol(self) -> str | None:
+        return self._stack[-1] if self._stack else None
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # noqa: N802
+        self._stack.append(node.name)
+        self.generic_visit(node)
+        self._stack.pop()
+
+    visit_AsyncFunctionDef = visit_FunctionDef  # type: ignore[assignment]
+
+    def visit_Compare(self, node: ast.Compare) -> None:  # noqa: N802
+        if len(node.ops) == 1 and isinstance(node.ops[0], ast.Eq):
+            operands = [node.left, *node.comparators]
+            for operand in operands:
+                if isinstance(operand, ast.Name) and _SECRET_NAME_HINTS_SCANNER.match(operand.id):
+                    self.hits.append((node, self._current_symbol()))
+                    break
+        self.generic_visit(node)
+
+
+class _DebugRunKwargVisitor(ast.NodeVisitor):
+    """Détecte app.run(debug=True) ou équivalent, typique de Flask."""
+
+    def __init__(self) -> None:
+        self.hits: list[tuple[ast.AST, str | None]] = []
+        self._stack: list[str] = []
+
+    def _current_symbol(self) -> str | None:
+        return self._stack[-1] if self._stack else None
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # noqa: N802
+        self._stack.append(node.name)
+        self.generic_visit(node)
+        self._stack.pop()
+
+    visit_AsyncFunctionDef = visit_FunctionDef  # type: ignore[assignment]
+
+    def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
+        for kw in node.keywords:
+            if kw.arg == "debug" and isinstance(kw.value, ast.Constant) and kw.value.value is True:
+                self.hits.append((node, self._current_symbol()))
+        self.generic_visit(node)
+
+
+class _DynamicPathVisitor(ast.NodeVisitor):
+    """Détecte open()/os.path.join() avec un chemin construit dynamiquement (concat/f-string)."""
+
+    def __init__(self) -> None:
+        self.hits: list[tuple[ast.AST, str | None]] = []
+        self._stack: list[str] = []
+
+    def _current_symbol(self) -> str | None:
+        return self._stack[-1] if self._stack else None
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # noqa: N802
+        self._stack.append(node.name)
+        self.generic_visit(node)
+        self._stack.pop()
+
+    visit_AsyncFunctionDef = visit_FunctionDef  # type: ignore[assignment]
+
+    def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
+        qualified = _qualified_call_name(node)
+        is_target = qualified in {"open", "os.path.join"}
+        if is_target:
+            for arg in node.args:
+                if isinstance(arg, ast.BinOp) and isinstance(arg.op, ast.Add):
+                    self.hits.append((node, self._current_symbol()))
+                    break
+                if isinstance(arg, ast.JoinedStr) and any(
+                    isinstance(v, ast.FormattedValue) for v in arg.values
+                ):
+                    self.hits.append((node, self._current_symbol()))
+                    break
+        self.generic_visit(node)
+class _SsrfSstiVisitor(ast.NodeVisitor):
+    """Détecte trois motifs de construction dynamique dangereuse :
+    SSTI (Jinja2), SSRF (requests), et verify=False (requests)."""
+
+    _SSTI_TARGETS = {"Jinja2.from_string", "jinja2.Template", "Template"}
+    _SSRF_TARGETS = {"requests.get", "requests.post", "requests.put", "requests.delete"}
+
+    def __init__(self) -> None:
+        self.ssti_hits: list[tuple[ast.AST, str | None]] = []
+        self.ssrf_hits: list[tuple[ast.AST, str | None]] = []
+        self.verify_false_hits: list[tuple[ast.AST, str | None]] = []
+        self._stack: list[str] = []
+
+    def _current_symbol(self) -> str | None:
+        return self._stack[-1] if self._stack else None
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # noqa: N802
+        self._stack.append(node.name)
+        self.generic_visit(node)
+        self._stack.pop()
+
+    visit_AsyncFunctionDef = visit_FunctionDef  # type: ignore[assignment]
+
+    @staticmethod
+    def _is_dynamic(arg: ast.expr) -> bool:
+        if isinstance(arg, ast.BinOp) and isinstance(arg.op, ast.Add):
+            return True
+        if isinstance(arg, ast.JoinedStr) and any(
+            isinstance(v, ast.FormattedValue) for v in arg.values
+        ):
+            return True
+        return False
+
+    def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
+        qualified = _qualified_call_name(node)
+
+        if qualified in self._SSTI_TARGETS and node.args and self._is_dynamic(node.args[0]):
+            self.ssti_hits.append((node, self._current_symbol()))
+
+        if qualified in self._SSRF_TARGETS:
+            if node.args and self._is_dynamic(node.args[0]):
+                self.ssrf_hits.append((node, self._current_symbol()))
+            for kw in node.keywords:
+                if kw.arg == "verify" and isinstance(kw.value, ast.Constant) and kw.value.value is False:
+                    self.verify_false_hits.append((node, self._current_symbol()))
+
+        self.generic_visit(node)
+
+
+class _OpenRedirectVisitor(ast.NodeVisitor):
+    """Détecte redirect() avec un argument non littéral (Open Redirect)."""
+
+    def __init__(self) -> None:
+        self.hits: list[tuple[ast.AST, str | None]] = []
+        self._stack: list[str] = []
+
+    def _current_symbol(self) -> str | None:
+        return self._stack[-1] if self._stack else None
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # noqa: N802
+        self._stack.append(node.name)
+        self.generic_visit(node)
+        self._stack.pop()
+
+    visit_AsyncFunctionDef = visit_FunctionDef  # type: ignore[assignment]
+
+    def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
+        qualified = _qualified_call_name(node)
+        if qualified == "redirect" and node.args:
+            first_arg = node.args[0]
+            if not isinstance(first_arg, ast.Constant):
+                self.hits.append((node, self._current_symbol()))
+        self.generic_visit(node)
 def scan_python_source(source: str) -> list[Finding]:
     """Analyse une source Python et retourne la liste des findings Tier 1.
 
@@ -309,6 +509,216 @@ def scan_python_source(source: str) -> list[Finding]:
                     "La chaîne ressemble à une requête SQL et contient une valeur "
                     "interpolée dynamiquement. Utilisez des requêtes paramétrées "
                     "(placeholders) au lieu de la concaténation ou du f-string."
+                ),
+                proof=_render_node(source, node),
+                location=_node_range(node),
+                enclosing_symbol=symbol,
+                tier="tier1_deterministic",
+            )
+        )
+
+    security_assign_visitor = _SecuritySensitiveAssignVisitor()
+    security_assign_visitor.visit(tree)
+    for kind, node, symbol in security_assign_visitor.hits:
+        if kind == "secret":
+            findings.append(
+                Finding(
+                    rule_id="NIA-SECRET-001",
+                    cwe="CWE-798",
+                    severity=Severity.CRITICAL,
+                    confidence=Confidence.MEDIUM,
+                    message="Secret potentiellement codé en dur dans le code source.",
+                    explanation=(
+                        "Une variable au nom évocateur d'un secret (password, token, "
+                        "api_key...) est assignée à une chaîne littérale. Utilisez une "
+                        "variable d'environnement ou un gestionnaire de secrets."
+                    ),
+                    proof=_render_node(source, node),
+                    location=_node_range(node),
+                    enclosing_symbol=symbol,
+                    tier="tier1_deterministic",
+                )
+            )
+        elif kind == "weak_random":
+            findings.append(
+                Finding(
+                    rule_id="NIA-RANDOM-001",
+                    cwe="CWE-330",
+                    severity=Severity.HIGH,
+                    confidence=Confidence.MEDIUM,
+                    message="Générateur aléatoire non cryptographique utilisé pour une valeur sensible.",
+                    explanation=(
+                        "random.random()/randint()/choice() n'est pas prévu pour un "
+                        "usage sécuritaire — utilisez le module secrets à la place."
+                    ),
+                    proof=_render_node(source, node),
+                    location=_node_range(node),
+                    enclosing_symbol=symbol,
+                    tier="tier1_deterministic",
+                )
+            )
+        elif kind == "debug":
+            findings.append(
+                Finding(
+                    rule_id="NIA-DEBUG-001",
+                    cwe="CWE-215",
+                    severity=Severity.HIGH,
+                    confidence=Confidence.HIGH,
+                    message="Mode debug activé — ne jamais déployer en production ainsi.",
+                    explanation=(
+                        "DEBUG = True expose des informations sensibles (stack traces, "
+                        "variables internes) si ce code atteint un environnement de production."
+                    ),
+                    proof=_render_node(source, node),
+                    location=_node_range(node),
+                    enclosing_symbol=symbol,
+                    tier="tier1_deterministic",
+                )
+            )
+
+    timing_visitor = _TimingUnsafeComparisonVisitor()
+    timing_visitor.visit(tree)
+    for node, symbol in timing_visitor.hits:
+        findings.append(
+            Finding(
+                rule_id="NIA-TIMING-001",
+                cwe="CWE-208",
+                severity=Severity.MEDIUM,
+                confidence=Confidence.LOW,
+                message="Comparaison directe (==) d'une valeur sensible — vulnérable à une attaque temporelle.",
+                explanation=(
+                    "Comparer un secret avec == peut fuiter sa valeur via le temps de "
+                    "réponse. Utilisez hmac.compare_digest() à la place."
+                ),
+                proof=_render_node(source, node),
+                location=_node_range(node),
+                enclosing_symbol=symbol,
+                tier="tier1_deterministic",
+            )
+        )
+
+    debug_run_visitor = _DebugRunKwargVisitor()
+    debug_run_visitor.visit(tree)
+    for node, symbol in debug_run_visitor.hits:
+        findings.append(
+            Finding(
+                rule_id="NIA-DEBUG-001",
+                cwe="CWE-215",
+                severity=Severity.HIGH,
+                confidence=Confidence.HIGH,
+                message="Mode debug activé — ne jamais déployer en production ainsi.",
+                explanation=(
+                    "Un serveur lancé avec debug=True (ex. Flask) expose un débogueur "
+                    "interactif et des informations sensibles si atteint en production."
+                ),
+                proof=_render_node(source, node),
+                location=_node_range(node),
+                enclosing_symbol=symbol,
+                tier="tier1_deterministic",
+            )
+        )
+
+    path_visitor = _DynamicPathVisitor()
+    path_visitor.visit(tree)
+    for node, symbol in path_visitor.hits:
+        findings.append(
+            Finding(
+                rule_id="NIA-PATH-001",
+                cwe="CWE-22",
+                severity=Severity.HIGH,
+                confidence=Confidence.LOW,
+                message="Chemin de fichier potentiellement construit dynamiquement sans validation (Path Traversal).",
+                explanation=(
+                    "open()/os.path.join() reçoit un chemin assemblé par concaténation "
+                    "ou f-string. Si une partie vient d'une entrée utilisateur, un "
+                    "attaquant pourrait accéder à des fichiers hors du dossier prévu "
+                    "(ex. '../../etc/passwd')."
+                ),
+                proof=_render_node(source, node),
+                location=_node_range(node),
+                enclosing_symbol=symbol,
+                tier="tier1_deterministic",
+            )
+        )
+
+    ssrf_ssti_visitor = _SsrfSstiVisitor()
+    ssrf_ssti_visitor.visit(tree)
+
+    for node, symbol in ssrf_ssti_visitor.ssti_hits:
+        findings.append(
+            Finding(
+                rule_id="NIA-SSTI-001",
+                cwe="CWE-1336",
+                severity=Severity.CRITICAL,
+                confidence=Confidence.MEDIUM,
+                message="Template Jinja2 construit dynamiquement — risque de Server-Side Template Injection (SSTI).",
+                explanation=(
+                    "Un template construit par concaténation ou f-string avec une "
+                    "entrée non fiable permet à un attaquant d'injecter des "
+                    "expressions Jinja2 exécutées côté serveur, pouvant mener à une "
+                    "exécution de code arbitraire (RCE)."
+                ),
+                proof=_render_node(source, node),
+                location=_node_range(node),
+                enclosing_symbol=symbol,
+                tier="tier1_deterministic",
+            )
+        )
+
+    for node, symbol in ssrf_ssti_visitor.ssrf_hits:
+        findings.append(
+            Finding(
+                rule_id="NIA-SSRF-002",
+                cwe="CWE-918",
+                severity=Severity.MEDIUM,
+                confidence=Confidence.LOW,
+                message="Requête HTTP (requests) potentiellement construite dynamiquement — risque SSRF.",
+                explanation=(
+                    "L'URL de la requête est assemblée par concaténation ou f-string. "
+                    "Si une partie vient d'une entrée utilisateur, un attaquant "
+                    "pourrait forcer le serveur à contacter une ressource interne."
+                ),
+                proof=_render_node(source, node),
+                location=_node_range(node),
+                enclosing_symbol=symbol,
+                tier="tier1_deterministic",
+            )
+        )
+
+    for node, symbol in ssrf_ssti_visitor.verify_false_hits:
+        findings.append(
+            Finding(
+                rule_id="NIA-TLS-003",
+                cwe="CWE-295",
+                severity=Severity.HIGH,
+                confidence=Confidence.HIGH,
+                message="requests appelé avec verify=False — vérification de certificat TLS désactivée.",
+                explanation=(
+                    "Désactiver verify expose à une attaque man-in-the-middle. Notez "
+                    "que la bibliothèque requests a eu un bug connu (CVE-2024-35195) "
+                    "où ce réglage restait actif de façon persistante sur une Session."
+                ),
+                proof=_render_node(source, node),
+                location=_node_range(node),
+                enclosing_symbol=symbol,
+                tier="tier1_deterministic",
+            )
+        )
+
+    open_redirect_visitor = _OpenRedirectVisitor()
+    open_redirect_visitor.visit(tree)
+    for node, symbol in open_redirect_visitor.hits:
+        findings.append(
+            Finding(
+                rule_id="NIA-REDIRECT-001",
+                cwe="CWE-601",
+                severity=Severity.MEDIUM,
+                confidence=Confidence.LOW,
+                message="redirect() avec une valeur non littérale — risque d'Open Redirect.",
+                explanation=(
+                    "Si l'URL de redirection vient d'une entrée utilisateur non "
+                    "validée, un attaquant peut rediriger vers un site malveillant "
+                    "en abusant de la confiance dans le domaine d'origine."
                 ),
                 proof=_render_node(source, node),
                 location=_node_range(node),

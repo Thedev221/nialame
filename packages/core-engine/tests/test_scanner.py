@@ -158,6 +158,54 @@ def test_detects_deprecated_ssl_wrap_socket():
     assert any(f.rule_id == "NIA-TLS-002" for f in findings)
 
 
+def test_detects_hardcoded_secret():
+    source = "def connect():\n    password = 'hunter2super'\n    return password\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-SECRET-001" for f in findings)
+
+
+def test_no_false_positive_on_secret_from_env():
+    source = "import os\n\ndef connect():\n    password = os.environ.get('DB_PASSWORD')\n    return password\n"
+    findings = scan_python_source(source)
+    assert not any(f.rule_id == "NIA-SECRET-001" for f in findings)
+
+
+def test_detects_weak_random_for_token():
+    source = "import random\n\ndef make_token():\n    token = random.random()\n    return token\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-RANDOM-001" for f in findings)
+
+
+def test_detects_timing_unsafe_comparison():
+    source = "def check(password, stored):\n    if password == stored:\n        return True\n    return False\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-TIMING-001" for f in findings)
+
+
+def test_detects_debug_mode_django():
+    source = "DEBUG = True\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-DEBUG-001" for f in findings)
+
+
+def test_detects_debug_mode_flask_run():
+    source = "def start(app):\n    app.run(debug=True)\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-DEBUG-001" for f in findings)
+
+
+def test_detects_path_traversal_via_fstring():
+    source = "def read_file(filename):\n    with open(f'/data/{filename}') as f:\n        return f.read()\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-PATH-001" for f in findings)
+
+
+def test_no_false_positive_on_static_path():
+    source = "def read_config():\n    with open('/etc/app/config.json') as f:\n        return f.read()\n"
+    findings = scan_python_source(source)
+    assert not any(f.rule_id == "NIA-PATH-001" for f in findings)
+
+
 def test_no_false_positive_on_safe_code():
     source = (
         "def add(a, b):\n"

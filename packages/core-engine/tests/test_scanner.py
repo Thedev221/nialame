@@ -206,6 +206,54 @@ def test_no_false_positive_on_static_path():
     assert not any(f.rule_id == "NIA-PATH-001" for f in findings)
 
 
+def test_detects_ssti_jinja2():
+    source = (
+        "from jinja2 import Template\n\n"
+        "def render(name):\n"
+        "    return Template('Hello ' + name + '!').render()\n"
+    )
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-SSTI-001" for f in findings)
+
+
+def test_detects_ssrf_requests_dynamic_url():
+    source = (
+        "import requests\n\n"
+        "def fetch(user_url):\n"
+        "    return requests.get('http://internal/' + user_url)\n"
+    )
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-SSRF-002" for f in findings)
+
+
+def test_detects_requests_verify_false():
+    source = (
+        "import requests\n\n"
+        "def fetch(url):\n"
+        "    return requests.get(url, verify=False)\n"
+    )
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-TLS-003" for f in findings)
+
+
+def test_detects_open_redirect():
+    source = (
+        "def go(target):\n"
+        "    return redirect(target)\n"
+    )
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-REDIRECT-001" for f in findings)
+
+
+def test_no_false_positive_on_static_redirect():
+    source = (
+        "def go():\n"
+        "    return redirect('/home')\n"
+    )
+    findings = scan_python_source(source)
+    assert not any(f.rule_id == "NIA-REDIRECT-001" for f in findings)
+
+
 def test_no_false_positive_on_safe_code():
     source = (
         "def add(a, b):\n"

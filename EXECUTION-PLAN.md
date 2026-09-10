@@ -9,12 +9,11 @@ Chaque tâche ci-dessous a : un objectif clair, l'endroit exact où travailler d
 ---
 
 ## TRIMESTRE 1 — Python solide + fondations JavaScript/TypeScript
-
-### T1.1 — Étendre les règles Python (9 → 40)
-- **Où** : `packages/core-engine/src/nialame/scanner.py`, dictionnaire `_DANGEROUS_CALLS`.
-- **Quoi** : ajouter des règles couvrant les catégories OWASP non encore traitées (ex. `tempfile.mktemp` non sûr, `subprocess.call` avec `shell=True`, `xml.etree` vulnérable au XXE, `random` utilisé pour un token de sécurité au lieu de `secrets`, assertions utilisées pour valider une entrée utilisateur).
-- **Terminé quand** : chaque règle a un test dans `test_scanner.py` prouvant la détection ET l'absence de faux positif ; `pytest -v` passe intégralement ; 40 règles au total pour Python.
-- **Dépendance** : aucune, peut démarrer immédiatement, plusieurs contributeurs peuvent s'y mettre en parallèle sur des règles différentes.
+### T1.1 — Étendre les règles Python (9 → 40) ✅ TERMINÉ
+- **Où** : `packages/core-engine/src/nialame/scanner.py`, dictionnaire `_DANGEROUS_CALLS` + plusieurs visitors AST dédiés pour les motifs avancés (SSTI, SSRF, timing attack, path traversal, etc.).
+- **Résultat** : 40 règles Python atteintes, couvrant des failles réelles documentées (CVE-2024-5124, CVE-2019-8341, CVE-2024-35195 entre autres). 62/62 tests passent.
+- **Contributeurs** : Thedev221, Abdoulaye Caba (première contribution externe).
+- **Limitation connue documentée** : le scanner ne résout pas encore les alias d'import (`import X as Y`) — backlog pour une itération future.
 
 ### T1.2 — Démarrer le parser AST JavaScript/TypeScript
 - **Où** : nouveau module `packages/core-engine/src/nialame/scanner_js.py` (ou équivalent), utilisant une bibliothèque de parsing existante (ex. lier à `esprima`/`@babel/parser` via un sous-processus Node, ou une bibliothèque Python équivalente si elle existe).

@@ -61,7 +61,7 @@ _DANGEROUS_CALLS: dict[str, dict[str, str]] = {
         "severity": Severity.CRITICAL,
         "message": "Utilisation de exec() sur une entrée potentiellement contrôlée par l'utilisateur.",
     },
-        "django.utils.safestring.mark_safe": {
+    "django.utils.safestring.mark_safe": {
         "rule_id": "NIA-XSS-001",
         "cwe": "CWE-79",
         "severity": Severity.HIGH,
@@ -97,19 +97,14 @@ _DANGEROUS_CALLS: dict[str, dict[str, str]] = {
         "severity": Severity.CRITICAL,
         "message": "Exécution de commande shell via os.popen — risque d'injection de commande.",
     },
-    "pickle.load": {
-        "rule_id": "NIA-DESER-001",
-        "cwe": "CWE-502",
-        "severity": Severity.HIGH,
-        "message": "Désérialisation non sûre via pickle.load sur une donnée potentiellement non fiable.",
-    },
+
     "xml.etree.ElementTree.fromstring": {
         "rule_id": "NIA-XXE-001",
         "cwe": "CWE-611",
         "severity": Severity.HIGH,
         "message": "Parsing XML potentiellement vulnérable aux attaques XXE (XML External Entity) sur une entrée non fiable.",
     },
-        "tempfile.mktemp": {
+    "tempfile.mktemp": {
         "rule_id": "NIA-TMPFILE-001",
         "cwe": "CWE-377",
         "severity": Severity.MEDIUM,
@@ -139,7 +134,7 @@ _DANGEROUS_CALLS: dict[str, dict[str, str]] = {
         "severity": Severity.HIGH,
         "message": "AutoAddPolicy accepte aveuglément n'importe quelle clé d'hôte SSH — expose à une attaque man-in-the-middle.",
     },
-        "DES.new": {
+    "DES.new": {
         "rule_id": "NIA-CRYPTO-002",
         "cwe": "CWE-327",
         "severity": Severity.MEDIUM,
@@ -156,6 +151,36 @@ _DANGEROUS_CALLS: dict[str, dict[str, str]] = {
         "cwe": "CWE-295",
         "severity": Severity.MEDIUM,
         "message": "ssl.wrap_socket est déprécié et ne valide pas correctement les certificats — utiliser ssl.SSLContext.",
+    },
+    "shelve.open": {
+        "rule_id": "NIA-DESER-006",
+        "cwe": "CWE-502",
+        "severity": Severity.HIGH,
+        "message": "shelve utilise pickle en interne — désérialisation non sûre sur une donnée potentiellement non fiable.",
+    },
+    "pickle.Unpickler": {
+        "rule_id": "NIA-DESER-007",
+        "cwe": "CWE-502",
+        "severity": Severity.HIGH,
+        "message": "pickle.Unpickler désérialise des données non fiables — même risque que pickle.loads.",
+    },
+    "importlib.import_module": {
+        "rule_id": "NIA-IMPORT-001",
+        "cwe": "CWE-829",
+        "severity": Severity.HIGH,
+        "message": "Import dynamique d'un module depuis une chaîne — dangereux si le nom vient d'une entrée non fiable.",
+    },
+    "urllib.request.urlretrieve": {
+        "rule_id": "NIA-INTEGRITY-001",
+        "cwe": "CWE-494",
+        "severity": Severity.MEDIUM,
+        "message": "Téléchargement de fichier sans vérification d'intégrité — vérifier l'origine et le hash du fichier obtenu.",
+    },
+    "os.symlink": {
+        "rule_id": "NIA-SYMLINK-001",
+        "cwe": "CWE-59",
+        "severity": Severity.MEDIUM,
+        "message": "Création de lien symbolique — risque de suivi de lien malveillant si le chemin cible n'est pas contrôlé.",
     },
 }
 

@@ -303,6 +303,36 @@ def test_detects_aes_ecb_mode():
     assert any(f.rule_id == "NIA-CRYPTO-004" for f in findings)
 
 
+def test_detects_shelve_open():
+    source = "import shelve\n\ndef load(path):\n    return shelve.open(path)\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-DESER-006" for f in findings)
+
+
+def test_detects_pickle_unpickler():
+    source = "import pickle\n\ndef load(f):\n    return pickle.Unpickler(f)\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-DESER-007" for f in findings)
+
+
+def test_detects_dynamic_import():
+    source = "import importlib\n\ndef load(name):\n    return importlib.import_module(name)\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-IMPORT-001" for f in findings)
+
+
+def test_detects_urlretrieve():
+    source = "import urllib.request\n\ndef fetch(url):\n    return urllib.request.urlretrieve(url)\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-INTEGRITY-001" for f in findings)
+
+
+def test_detects_symlink():
+    source = "import os\n\ndef link(src, dst):\n    os.symlink(src, dst)\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-SYMLINK-001" for f in findings)
+
+
 def test_no_false_positive_on_safe_code():
     source = (
         "def add(a, b):\n"

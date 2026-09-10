@@ -1,3 +1,4 @@
+
 """Analyse Tier 1 déterministe basée sur le module ``ast`` de la stdlib.
 
 Ce module ne dépend d'aucun LLM et doit rester rapide (SLA visé < 50ms
@@ -460,6 +461,70 @@ class _OpenRedirectVisitor(ast.NodeVisitor):
             if not isinstance(first_arg, ast.Constant):
                 self.hits.append((node, self._current_symbol()))
         self.generic_visit(node)
+class _AdvancedPatternVisitor(ast.NodeVisitor):
+    """Détecte 6 motifs avancés supplémentaires, ancrés dans des CVE réels."""
+
+    _SHELL_TRUE_TARGETS = {"subprocess.run", "subprocess.check_output", "subprocess.check_call"}
+
+    def __init__(self) -> None:
+        self.zip_slip_hits: list[tuple[ast.AST, str | None]] = []
+        self.shell_true_hits: list[tuple[ast.AST, str | None]] = []
+        self.jwt_hits: list[tuple[ast.AST, str | None]] = []
+        self.xxe_lxml_hits: list[tuple[ast.AST, str | None]] = []
+        self.cors_wildcard_hits: list[tuple[ast.AST, str | None]] = []
+        self.ecb_mode_hits: list[tuple[ast.AST, str | None]] = []
+        self._stack: list[str] = []
+
+    def _current_symbol(self) -> str | None:
+        return self._stack[-1] if self._stack else None
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # noqa: N802
+        self._stack.append(node.name)
+        self.generic_visit(node)
+        self._stack.pop()
+
+    visit_AsyncFunctionDef = visit_FunctionDef  # type: ignore[assignment]
+
+    def visit_Call(self, node: ast.Call) -> None:  # noqa: N802
+        qualified = _qualified_call_name(node)
+
+        if isinstance(node.func, ast.Attribute) and node.func.attr == "extractall":
+            self.zip_slip_hits.append((node, self._current_symbol()))
+
+        if qualified in self._SHELL_TRUE_TARGETS:
+            for kw in node.keywords:
+                if kw.arg == "shell" and isinstance(kw.value, ast.Constant) and kw.value.value is True:
+                    self.shell_true_hits.append((node, self._current_symbol()))
+
+        if qualified == "jwt.decode":
+            for kw in node.keywords:
+                if kw.arg == "verify" and isinstance(kw.value, ast.Constant) and kw.value.value is False:
+                    self.jwt_hits.append((node, self._current_symbol()))
+                if kw.arg == "algorithms" and isinstance(kw.value, ast.List):
+                    for elt in kw.value.elts:
+                        if (
+                            isinstance(elt, ast.Constant)
+                            and isinstance(elt.value, str)
+                            and elt.value.lower() == "none"
+                        ):
+                            self.jwt_hits.append((node, self._current_symbol()))
+
+        if qualified in {"etree.XMLParser", "lxml.etree.XMLParser"}:
+            for kw in node.keywords:
+                if kw.arg == "resolve_entities" and isinstance(kw.value, ast.Constant) and kw.value.value is True:
+                    self.xxe_lxml_hits.append((node, self._current_symbol()))
+
+        if qualified == "CORS":
+            for kw in node.keywords:
+                if kw.arg == "origins" and isinstance(kw.value, ast.Constant) and kw.value.value == "*":
+                    self.cors_wildcard_hits.append((node, self._current_symbol()))
+
+        if qualified in {"AES.new", "Crypto.Cipher.AES.new"}:
+            for arg in node.args:
+                if isinstance(arg, ast.Attribute) and arg.attr == "MODE_ECB":
+                    self.ecb_mode_hits.append((node, self._current_symbol()))
+
+        self.generic_visit(node)
 def scan_python_source(source: str) -> list[Finding]:
     """Analyse une source Python et retourne la liste des findings Tier 1.
 
@@ -719,6 +784,129 @@ def scan_python_source(source: str) -> list[Finding]:
                     "Si l'URL de redirection vient d'une entrée utilisateur non "
                     "validée, un attaquant peut rediriger vers un site malveillant "
                     "en abusant de la confiance dans le domaine d'origine."
+                ),
+                proof=_render_node(source, node),
+                location=_node_range(node),
+                enclosing_symbol=symbol,
+                tier="tier1_deterministic",
+            )
+        )
+
+    advanced_visitor = _AdvancedPatternVisitor()
+    advanced_visitor.visit(tree)
+
+    for node, symbol in advanced_visitor.zip_slip_hits:
+        findings.append(
+            Finding(
+                rule_id="NIA-ZIPSLIP-001",
+                cwe="CWE-22",
+                severity=Severity.HIGH,
+                confidence=Confidence.LOW,
+                message="extractall() sans validation des chemins — risque de Zip Slip.",
+                explanation=(
+                    "Une archive malveillante peut contenir des chemins comme "
+                    "'../../etc/cron.d/evil' qui s'extraient en dehors du dossier "
+                    "prévu. Valider chaque chemin membre avant extraction."
+                ),
+                proof=_render_node(source, node),
+                location=_node_range(node),
+                enclosing_symbol=symbol,
+                tier="tier1_deterministic",
+            )
+        )
+
+    for node, symbol in advanced_visitor.shell_true_hits:
+        findings.append(
+            Finding(
+                rule_id="NIA-CMD-005",
+                cwe="CWE-78",
+                severity=Severity.CRITICAL,
+                confidence=Confidence.HIGH,
+                message="subprocess appelé avec shell=True — risque d'injection de commande.",
+                explanation=(
+                    "shell=True interprète la commande via un shell, permettant "
+                    "l'injection de méta-caractères si une partie de la commande "
+                    "vient d'une entrée non fiable."
+                ),
+                proof=_render_node(source, node),
+                location=_node_range(node),
+                enclosing_symbol=symbol,
+                tier="tier1_deterministic",
+            )
+        )
+
+    for node, symbol in advanced_visitor.jwt_hits:
+        findings.append(
+            Finding(
+                rule_id="NIA-JWT-001",
+                cwe="CWE-347",
+                severity=Severity.CRITICAL,
+                confidence=Confidence.HIGH,
+                message="Vérification JWT désactivée ou algorithme 'none' accepté.",
+                explanation=(
+                    "Un token JWT non vérifié ou acceptant l'algorithme 'none' peut "
+                    "être forgé par un attaquant pour usurper n'importe quelle "
+                    "identité (attaque de confusion d'algorithme)."
+                ),
+                proof=_render_node(source, node),
+                location=_node_range(node),
+                enclosing_symbol=symbol,
+                tier="tier1_deterministic",
+            )
+        )
+
+    for node, symbol in advanced_visitor.xxe_lxml_hits:
+        findings.append(
+            Finding(
+                rule_id="NIA-XXE-002",
+                cwe="CWE-611",
+                severity=Severity.HIGH,
+                confidence=Confidence.HIGH,
+                message="XMLParser lxml avec resolve_entities=True — vulnérable au XXE.",
+                explanation=(
+                    "Autoriser la résolution d'entités externes permet à un attaquant "
+                    "de lire des fichiers locaux ou de déclencher des requêtes "
+                    "réseau via un document XML malveillant."
+                ),
+                proof=_render_node(source, node),
+                location=_node_range(node),
+                enclosing_symbol=symbol,
+                tier="tier1_deterministic",
+            )
+        )
+
+    for node, symbol in advanced_visitor.cors_wildcard_hits:
+        findings.append(
+            Finding(
+                rule_id="NIA-CORS-001",
+                cwe="CWE-942",
+                severity=Severity.MEDIUM,
+                confidence=Confidence.HIGH,
+                message="CORS configuré avec origins='*' — autorise n'importe quel site à appeler cette API.",
+                explanation=(
+                    "Un wildcard CORS permet à n'importe quel site web tiers "
+                    "d'effectuer des requêtes vers cette API depuis le navigateur "
+                    "d'une victime, un risque accru si l'API gère des données sensibles."
+                ),
+                proof=_render_node(source, node),
+                location=_node_range(node),
+                enclosing_symbol=symbol,
+                tier="tier1_deterministic",
+            )
+        )
+
+    for node, symbol in advanced_visitor.ecb_mode_hits:
+        findings.append(
+            Finding(
+                rule_id="NIA-CRYPTO-004",
+                cwe="CWE-327",
+                severity=Severity.MEDIUM,
+                confidence=Confidence.HIGH,
+                message="Chiffrement AES en mode ECB — révèle des motifs dans les données malgré le chiffrement.",
+                explanation=(
+                    "Le mode ECB chiffre chaque bloc indépendamment, donc des blocs "
+                    "identiques en clair produisent des blocs identiques chiffrés "
+                    "(effet 'pingouin ECB'). Utiliser AES-GCM ou AES-CBC avec IV aléatoire."
                 ),
                 proof=_render_node(source, node),
                 location=_node_range(node),

@@ -254,6 +254,55 @@ def test_no_false_positive_on_static_redirect():
     assert not any(f.rule_id == "NIA-REDIRECT-001" for f in findings)
 
 
+def test_detects_zip_slip():
+    source = (
+        "import zipfile\n\n"
+        "def extract(path):\n"
+        "    with zipfile.ZipFile(path) as z:\n"
+        "        z.extractall('/tmp/output')\n"
+    )
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-ZIPSLIP-001" for f in findings)
+
+
+def test_detects_subprocess_run_shell_true():
+    source = "import subprocess\n\ndef run(cmd):\n    subprocess.run(cmd, shell=True)\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-CMD-005" for f in findings)
+
+
+def test_detects_jwt_verify_false():
+    source = "import jwt\n\ndef decode(token):\n    return jwt.decode(token, verify=False)\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-JWT-001" for f in findings)
+
+
+def test_detects_lxml_resolve_entities():
+    source = (
+        "from lxml import etree\n\n"
+        "def make_parser():\n"
+        "    return etree.XMLParser(resolve_entities=True)\n"
+    )
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-XXE-002" for f in findings)
+
+
+def test_detects_cors_wildcard():
+    source = "def setup(app):\n    CORS(app, origins='*')\n"
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-CORS-001" for f in findings)
+
+
+def test_detects_aes_ecb_mode():
+    source = (
+        "from Crypto.Cipher import AES\n\n"
+        "def encrypt(key):\n"
+        "    return AES.new(key, AES.MODE_ECB)\n"
+    )
+    findings = scan_python_source(source)
+    assert any(f.rule_id == "NIA-CRYPTO-004" for f in findings)
+
+
 def test_no_false_positive_on_safe_code():
     source = (
         "def add(a, b):\n"

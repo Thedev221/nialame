@@ -105,6 +105,60 @@ def test_detects_hardcoded_secret_js():
     assert any(f.rule_id == "NIA-JS-SECRET-001" for f in findings)
 
 
+def test_detects_sql_injection_query():
+    source = "function get(userId) { db.query('SELECT * FROM users WHERE id=' + userId); }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-SQLI-001" for f in findings)
+
+
+def test_detects_shell_true():
+    source = "function run(cmd) { child_process.spawn(cmd, { shell: true }); }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-CMD-002" for f in findings)
+
+
+def test_detects_node_serialize_unserialize():
+    source = "function load(data) { return serialize.unserialize(data); }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-DESER-001" for f in findings)
+
+
+def test_detects_open_redirect_js():
+    source = "function go(target) { res.redirect(target); }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-REDIRECT-001" for f in findings)
+
+
+def test_no_false_positive_static_redirect_js():
+    source = "function go() { res.redirect('/home'); }"
+    findings = scan_javascript_source(source)
+    assert not any(f.rule_id == "NIA-JS-REDIRECT-001" for f in findings)
+
+
+def test_detects_xxe_libxmljs():
+    source = "function parse(xml) { return libxmljs.parseXml(xml, { noent: true }); }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-XXE-001" for f in findings)
+
+
+def test_detects_jwt_hardcoded_secret():
+    source = "function sign(payload) { return jwt.sign(payload, 'my-super-secret-key'); }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-JWT-002" for f in findings)
+
+
+def test_detects_zip_slip_js():
+    source = "function extract(zip) { zip.extractAllTo('/tmp/out'); }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-ZIPSLIP-001" for f in findings)
+
+
+def test_detects_prototype_pollution():
+    source = "function merge(key, obj) { obj[key]['__proto__'] = {}; }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-PROTO-001" for f in findings)
+
+
 def test_no_false_positive_safe_js_code():
     source = "function add(a, b) { return a + b; }"
     findings = scan_javascript_source(source)

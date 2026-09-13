@@ -99,7 +99,16 @@ def _get_qualified_member_name(node: dict) -> str | None:
             return f"{obj_name}.{prop_name}"
     return None
 
-
+def _get_call_property_name(node: dict) -> str | None:
+    """Retourne juste le nom de propriété d'un appel (ex. 'query' pour
+    n'importe quel objet.query()), sans exiger de connaître le nom exact
+    de l'objet — utile quand le nom de la variable (db, pool, conn...) varie."""
+    callee = node.get("callee")
+    if isinstance(callee, dict) and callee.get("type") == "MemberExpression":
+        prop = callee.get("property")
+        if isinstance(prop, dict):
+            return prop.get("name")
+    return None
 def _is_dynamic_js_value(node) -> bool:
     """Détecte une concaténation (+) ou un template literal avec interpolation."""
     if not isinstance(node, dict):
@@ -255,5 +264,105 @@ def scan_javascript_source(source: str) -> list[Finding]:
                             "Math.random() utilisé pour une valeur sensible — générateur non cryptographique.",
                             "Math.random() n'est pas prévu pour un usage sécuritaire — utilisez crypto.randomBytes() à la place.",
                         ))
+
+
+        if node_type in ("CallExpression", "NewExpression"):
+            prop_name = _get_call_property_name(node)
+            args = node.get("arguments", [])
+
+            if prop_name == "query" and args and _is_dynamic_js_value(args[0]):
+                findings.append(_make_js_finding(
+                    source, node, "NIA-JS-SQLI-001", "CWE-89", Severity.CRITICAL,
+                    "Requête SQL potentiellement construite par concaténation dynamique.",
+                    "L'argument de .query() est assemblé par concaténation ou template literal. Utilisez des requêtes paramétrées (placeholders ?) au lieu d'interpoler directement.",
+                ))
+
+            if prop_name in {"spawn", "execSync"}:
+                for kw in args:
+                    if kw.get("type") == "ObjectExpression":
+                        for prop in kw.get("properties", []):
+                            if (
+                                prop.get("key", {}).get("name") == "shell"
+                                and prop.get("value", {}).get("value") is True
+                            ):
+                                findings.append(_make_js_finding(
+                                    source, node, "NIA-JS-CMD-002", "CWE-78", Severity.CRITICAL,
+                                    "child_process appelé avec shell: true — risque d'injection de commande.",
+                                    "shell: true interprète la commande via un shell, permettant l'injection de méta-caractères si une partie vient d'une entrée non fiable.",
+                                ))
+                if args and _is_dynamic_js_value(args[0]):
+                    findings.append(_make_js_finding(
+                        source, node, "NIA-JS-CMD-002", "CWE-78", Severity.CRITICAL,
+                        "Commande shell construite dynamiquement.",
+                        "La commande est assemblée par concaténation ou template literal — risque d'injection si une partie vient d'une entrée non fiable.",
+                    ))
+
+            if _get_qualified_member_name(node) == "node-serialize.unserialize" or prop_name == "unserialize":
+                findings.append(_make_js_finding(
+                    source, node, "NIA-JS-DESER-001", "CWE-502", Severity.CRITICAL,
+                    "Désérialisation non sûre via node-serialize — RCE connue et documentée.",
+                    "Le package node-serialize permet d'exécuter du code arbitraire via un objet JSON spécialement conçu passé à unserialize().",
+                ))
+
+            if prop_name == "redirect" and args and args[0].get("type") != "Literal":
+                findings.append(_make_js_finding(
+                    source, node, "NIA-JS-REDIRECT-001", "CWE-601", Severity.MEDIUM,
+                    "res.redirect() avec une valeur non littérale — risque d'Open Redirect.",
+                    "Si l'URL de redirection vient d'une entrée utilisateur non validée, un attaquant peut rediriger vers un site malveillant.",
+                ))
+
+            if prop_name == "parseXml":
+                for kw in args:
+                    if kw.get("type") == "ObjectExpression":
+                        for prop in kw.get("properties", []):
+                            if (
+                                prop.get("key", {}).get("name") == "noent"
+                                and prop.get("value", {}).get("value") is True
+                            ):
+                                findings.append(_make_js_finding(
+                                    source, node, "NIA-JS-XXE-001", "CWE-611", Severity.HIGH,
+                                    "parseXml appelé avec noent: true — vulnérable au XXE.",
+                                    "Autoriser la résolution d'entités externes permet à un attaquant de lire des fichiers locaux via un document XML malveillant.",
+                                ))
+
+            if prop_name == "sign" and args and len(args) >= 2:
+                secret_arg = args[1]
+                if secret_arg.get("type") == "Literal" and isinstance(secret_arg.get("value"), str):
+                    findings.append(_make_js_finding(
+                        source, node, "NIA-JS-JWT-002", "CWE-798", Severity.CRITICAL,
+                        "jwt.sign() avec un secret codé en dur.",
+                        "Le secret de signature JWT est une chaîne littérale dans le code source. Utilisez une variable d'environnement.",
+                    ))
+
+            if prop_name == "extractAllTo":
+                findings.append(_make_js_finding(
+                    source, node, "NIA-JS-ZIPSLIP-001", "CWE-22", Severity.HIGH,
+                    "extractAllTo() sans validation des chemins — risque de Zip Slip.",
+                    "Une archive malveillante peut contenir des chemins qui s'extraient en dehors du dossier prévu. Valider chaque chemin membre avant extraction.",
+                ))
+
+        if node_type == "Property":
+            key = node.get("key", {})
+            if key.get("name") == "$where" or (key.get("type") == "Literal" and key.get("value") == "$where"):
+                value = node.get("value", {})
+                if _is_dynamic_js_value(value) or value.get("type") == "Identifier":
+                    findings.append(_make_js_finding(
+                        source, node, "NIA-JS-NOSQL-001", "CWE-943", Severity.CRITICAL,
+                        "$where MongoDB avec une valeur potentiellement dynamique — risque d'injection NoSQL.",
+                        "$where exécute du JavaScript côté serveur MongoDB. Si la valeur vient d'une entrée non fiable, un attaquant peut injecter du code arbitraire.",
+                    ))
+
+        if node_type == "MemberExpression":
+            prop = node.get("property", {})
+            computed = node.get("computed", False)
+            if computed and prop.get("type") == "Literal" and prop.get("value") == "__proto__":
+                findings.append(_make_js_finding(
+                    source, node, "NIA-JS-PROTO-001", "CWE-1321", Severity.HIGH,
+                    "Accès à __proto__ via une clé dynamique — risque de Prototype Pollution.",
+                    "Modifier __proto__ via une clé calculée dynamiquement (souvent depuis une entrée utilisateur, ex. JSON.parse) peut altérer le comportement de tous les objets de l'application.",
+                ))
+
+        if node_type == "Literal" and isinstance(node.get("value"), str):
+            pass  # réservé pour une future règle sur les cookies (voir note ci-dessous)
 
     return findings

@@ -15,11 +15,10 @@ Chaque tâche ci-dessous a : un objectif clair, l'endroit exact où travailler d
 - **Contributeurs** : Thedev221, Abdoulaye Caba (première contribution externe).
 - **Limitation connue documentée** : le scanner ne résout pas encore les alias d'import (`import X as Y`) — backlog pour une itération future.
 
-### T1.2 — Démarrer le parser AST JavaScript/TypeScript
-- **Où** : nouveau module `packages/core-engine/src/nialame/scanner_js.py` (ou équivalent), utilisant une bibliothèque de parsing existante (ex. lier à `esprima`/`@babel/parser` via un sous-processus Node, ou une bibliothèque Python équivalente si elle existe).
-- **Quoi** : poser la structure permettant de parser du JS/TS en une représentation exploitable, sur le modèle de ce que fait déjà `scanner.py` pour Python.
-- **Terminé quand** : un fichier `.js` de test simple est parsé sans erreur et retourne une structure équivalente à ce que `ast.parse` retourne pour Python.
-- **Dépendance** : aucune, indépendant de T1.1.
+### T1.2 — Démarrer le parser AST JavaScript/TypeScript ✅ TERMINÉ
+- **Où** : `packages/core-engine/js_parser/parse.js` (pont Node.js/esprima) + `packages/core-engine/src/nialame/scanner_js.py` (invocation en sous-processus).
+- **Résultat** : parsing JS/TS fonctionnel, 4 tests dédiés passent (fonction simple, déclaration de variable, syntaxe invalide, source vide).
+- **Prochaine étape** : T1.3 — premières règles de détection JS/TS s'appuyant sur cette fondation.
 
 ### T1.3 — Premières règles JavaScript/TypeScript (0 → 15-20)
 - **Où** : le nouveau module créé en T1.2.

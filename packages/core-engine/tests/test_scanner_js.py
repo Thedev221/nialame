@@ -159,6 +159,102 @@ def test_detects_prototype_pollution():
     assert any(f.rule_id == "NIA-JS-PROTO-001" for f in findings)
 
 
+def test_detects_insecure_cookie():
+    source = "function setAuth(res, token) { res.cookie('session', token); }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-COOKIE-001" for f in findings)
+
+
+def test_no_false_positive_secure_cookie():
+    source = "function setAuth(res, token) { res.cookie('session', token, { httpOnly: true, secure: true }); }"
+    findings = scan_javascript_source(source)
+    assert not any(f.rule_id == "NIA-JS-COOKIE-001" for f in findings)
+
+
+def test_detects_cors_wildcard_setheader():
+    source = "function handle(res) { res.setHeader('Access-Control-Allow-Origin', '*'); }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-CORS-001" for f in findings)
+
+
+def test_detects_header_injection():
+    source = "function handle(res, name) { res.setHeader('X-User', name); }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-HEADER-001" for f in findings)
+
+
+def test_detects_tls_reject_unauthorized_false():
+    source = "function connect() { return https.request({ rejectUnauthorized: false }); }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-TLS-001" for f in findings)
+
+
+def test_detects_vm_run_in_new_context():
+    source = "function run(code) { return vm.runInNewContext(code); }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-VM-001" for f in findings)
+
+
+def test_detects_yaml_load_js():
+    source = "function load(data) { return yaml.load(data); }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-YAML-001" for f in findings)
+
+
+def test_detects_ssti_ejs():
+    source = "function render(name) { return ejs.render('Hello ' + name); }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-SSTI-001" for f in findings)
+
+
+def test_detects_process_env_exposed():
+    source = "function handler(req, res) { res.json(process.env); }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-EXPOSE-001" for f in findings)
+
+
+def test_detects_ssrf_axios():
+    source = "function fetchUrl(userUrl) { return axios.get('http://internal/' + userUrl); }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-SSRF-001" for f in findings)
+
+
+def test_detects_mass_assignment():
+    source = "function update(user, req) { Object.assign(user, req.body); }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-MASSASSIGN-001" for f in findings)
+
+
+def test_detects_deprecated_create_cipher():
+    source = "function encrypt(key) { return crypto.createCipher('aes192', key); }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-CRYPTO-002" for f in findings)
+
+
+def test_detects_dynamic_path_join():
+    source = "function build(userPath) { return path.join('/data', userPath); }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-PATH-002" for f in findings)
+
+
+def test_detects_legacy_buffer_constructor():
+    source = "function make(size) { return new Buffer(size); }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-BUFFER-001" for f in findings)
+
+
+def test_detects_hardcoded_session_secret():
+    source = "function setup(app) { app.use(session({ secret: 'my-hardcoded-secret' })); }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-SESSION-001" for f in findings)
+
+
+def test_detects_timing_unsafe_comparison_js():
+    source = "function check(password, stored) { if (password === stored) { return true; } return false; }"
+    findings = scan_javascript_source(source)
+    assert any(f.rule_id == "NIA-JS-TIMING-001" for f in findings)
+
+
 def test_no_false_positive_safe_js_code():
     source = "function add(a, b) { return a + b; }"
     findings = scan_javascript_source(source)

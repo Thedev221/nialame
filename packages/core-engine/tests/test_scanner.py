@@ -359,3 +359,15 @@ def test_find_enclosing_symbol():
     )
     assert find_enclosing_symbol(source, 3) == "inner"
 
+
+def test_detects_hardcoded_string_in_comparison():
+    """Détecte if user_input == 'admin': — chaîne littérale hardcodée en dur"""
+    source = (
+        "def check_user(user_input):\n"
+        "    if user_input == 'admin':\n"
+        "        return True\n"
+        "    return False\n"
+    )
+    findings = scan_python_source(source)
+    # On cherche la règle NIA-HARDCODED-LITERAL-001 qu'on va créer
+    assert any(f.rule_id == "NIA-HARDCODED-LITERAL-001" for f in findings)

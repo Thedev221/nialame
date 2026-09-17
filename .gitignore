@@ -26,3 +26,9 @@ Thumbs.db
 # Nialame runtime
 *.sarif
 .nialame-cache/
+
+# Binaires Go compilés (à construire localement, jamais à commiter)
+packages/core-engine/go_parser/parse_go_binary
+
+# Binaires Go compilés (à construire localement, jamais à commiter)
+packages/core-engine/go_parser/parse_go_binary

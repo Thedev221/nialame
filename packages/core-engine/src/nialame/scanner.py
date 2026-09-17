@@ -357,7 +357,47 @@ class _TimingUnsafeComparisonVisitor(ast.NodeVisitor):
                     break
         self.generic_visit(node)
 
+class _HardcodedLiteralComparisonVisitor(ast.NodeVisitor):
+    """Détecte une comparaison == entre un paramètre de fonction et une
+    chaîne littérale (ex. if user_input == 'admin') — souvent un
+    contrôle d'accès fragile ou une porte dérobée de test oubliée."""
 
+    def __init__(self) -> None:
+        self.hits: list[tuple[ast.AST, str | None]] = []
+        self._stack: list[str] = []
+        self._current_params: set[str] = set()
+
+    def _current_symbol(self) -> str | None:
+        return self._stack[-1] if self._stack else None
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # noqa: N802
+        previous_params = self._current_params
+        self._current_params = {arg.arg for arg in node.args.args}
+        self._stack.append(node.name)
+        self.generic_visit(node)
+        self._stack.pop()
+        self._current_params = previous_params
+
+    visit_AsyncFunctionDef = visit_FunctionDef  # type: ignore[assignment]
+
+    def visit_Compare(self, node: ast.Compare) -> None:  # noqa: N802
+        if len(node.ops) == 1 and isinstance(node.ops[0], ast.Eq):
+            left, right = node.left, node.comparators[0]
+            param_side = None
+            literal_side = None
+            if isinstance(left, ast.Name) and left.id in self._current_params:
+                param_side, literal_side = left, right
+            elif isinstance(right, ast.Name) and right.id in self._current_params:
+                param_side, literal_side = right, left
+
+            if (
+                param_side is not None
+                and isinstance(literal_side, ast.Constant)
+                and isinstance(literal_side.value, str)
+            ):
+                self.hits.append((node, self._current_symbol()))
+
+        self.generic_visit(node)
 class _DebugRunKwargVisitor(ast.NodeVisitor):
     """Détecte app.run(debug=True) ou équivalent, typique de Flask."""
 
@@ -687,6 +727,28 @@ def scan_python_source(source: str) -> list[Finding]:
             )
         )
 
+    hardcoded_literal_visitor = _HardcodedLiteralComparisonVisitor()
+    hardcoded_literal_visitor.visit(tree)
+    for node, symbol in hardcoded_literal_visitor.hits:
+        findings.append(
+            Finding(
+                rule_id="NIA-HARDCODED-LITERAL-001",
+                cwe="CWE-798",
+                severity=Severity.MEDIUM,
+                confidence=Confidence.LOW,
+                message="Comparaison d'un paramètre avec une chaîne codée en dur — contrôle d'accès potentiellement fragile.",
+                explanation=(
+                    "Comparer directement un paramètre de fonction à une valeur "
+                    "littérale (ex. un rôle ou un mot de passe 'magique') est souvent "
+                    "un contrôle d'accès fragile ou une porte dérobée de test oubliée "
+                    "en production. Vérifiez l'intention de ce code."
+                ),
+                proof=_render_node(source, node),
+                location=_node_range(node),
+                enclosing_symbol=symbol,
+                tier="tier1_deterministic",
+            )
+        )
     debug_run_visitor = _DebugRunKwargVisitor()
     debug_run_visitor.visit(tree)
     for node, symbol in debug_run_visitor.hits:

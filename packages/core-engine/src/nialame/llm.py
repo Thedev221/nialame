@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
+import textwrap
 from dataclasses import dataclass
 
 import httpx
@@ -151,7 +153,7 @@ async def generate_patch_for_finding(
         raise LlmInvalidResponseError(
             "Le LLM n'a pas renvoyé 'replacement_lines' au format attendu (liste de chaînes)."
         )
-
+    replacement_lines = _sanitize_replacement_lines(replacement_lines)
     explanation = result.raw_json.get("explanation", "")
     if not isinstance(explanation, str):
         explanation = ""
@@ -177,3 +179,24 @@ async def generate_patch_for_finding(
     )
 
     return patch, explanation
+_MARKDOWN_FENCE_PATTERN = re.compile(r"^```[a-zA-Z]*$")
+
+
+def _sanitize_replacement_lines(lines: list[str]) -> list[str]:
+    """Nettoie les lignes renvoyées par le LLM avant validation AST.
+
+    Corrige deux erreurs fréquentes des petits modèles :
+    1. Balises Markdown parasites (```python / ```) laissées dans la
+       sortie malgré la consigne "JSON strict, pas de backticks".
+    2. Indentation incohérente — textwrap.dedent() retire l'indentation
+       commune superflue, sans jamais en ajouter (donc sans risque de
+       casser du code déjà bien indenté).
+    """
+    cleaned = [line for line in lines if not _MARKDOWN_FENCE_PATTERN.match(line.strip())]
+
+    if not cleaned:
+        return cleaned
+
+    joined = "\n".join(cleaned)
+    dedented = textwrap.dedent(joined)
+    return dedented.split("\n")

@@ -1,0 +1,30 @@
+from nialame.llm import _sanitize_replacement_lines
+
+
+def test_removes_markdown_fence_with_language():
+    lines = ["```python", "    return 1", "```"]
+    assert _sanitize_replacement_lines(lines) == ["return 1"]
+
+
+def test_removes_bare_markdown_fence():
+    lines = ["```", "    return 1", "```"]
+    assert _sanitize_replacement_lines(lines) == ["return 1"]
+
+
+def test_dedents_over_indented_code():
+    lines = ["        return 1"]
+    assert _sanitize_replacement_lines(lines) == ["return 1"]
+
+
+def test_preserves_relative_indentation():
+    lines = ["    if True:", "        return 1"]
+    assert _sanitize_replacement_lines(lines) == ["if True:", "    return 1"]
+
+
+def test_no_change_on_clean_code():
+    lines = ["    return 1"]
+    assert _sanitize_replacement_lines(lines) == ["return 1"]
+
+
+def test_empty_list_stays_empty():
+    assert _sanitize_replacement_lines([]) == []

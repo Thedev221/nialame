@@ -264,6 +264,45 @@ func check(tokenString string) {
     assert any(f.rule_id == "NIA-GO-JWT-001" for f in findings)
 
 
+def test_detects_cookie_set():
+    source = """package main
+
+import "net/http"
+
+func setAuth(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{Name: "session"})
+}
+"""
+    findings = scan_go_source(source)
+    assert any(f.rule_id == "NIA-GO-COOKIE-001" for f in findings)
+
+
+def test_detects_dynamic_regexp():
+    source = """package main
+
+import "regexp"
+
+func compile(userPattern string) {
+	regexp.MustCompile("^" + userPattern)
+}
+"""
+    findings = scan_go_source(source)
+    assert any(f.rule_id == "NIA-GO-REGEXP-001" for f in findings)
+
+
+def test_detects_dynamic_lookpath():
+    source = """package main
+
+import "os/exec"
+
+func find(userBinary string) {
+	exec.LookPath("prefix" + userBinary)
+}
+"""
+    findings = scan_go_source(source)
+    assert any(f.rule_id == "NIA-GO-PATH-003" for f in findings)
+
+
 def test_no_false_positive_safe_go_code():
     source = """package main
 

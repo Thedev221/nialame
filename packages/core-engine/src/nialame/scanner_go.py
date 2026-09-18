@@ -181,6 +181,9 @@ _GO_SIMPLE_RULES: dict[str, tuple] = {
     "unsafe.Pointer": ("NIA-GO-UNSAFE-001", "CWE-119", Severity.MEDIUM,
         "Usage du package unsafe — contourne les garanties de sûreté mémoire de Go.",
         "unsafe.Pointer désactive les vérifications du compilateur et peut mener à des corruptions mémoire. À réserver aux cas strictement nécessaires et bien audités."),
+    "http.SetCookie": ("NIA-GO-COOKIE-001", "CWE-614", Severity.LOW,
+        "Pose d'un cookie — vérifier que les attributs HttpOnly et Secure sont activés.",
+        "Sans HttpOnly, le cookie est accessible en JavaScript (risque de vol via XSS). Sans Secure, il peut être transmis en clair sur HTTP. (Le parseur Go actuel ne lit pas les champs de la structure http.Cookie : vérification manuelle requise.)"),
 }
 
 # Règles nécessitant un argument construit dynamiquement (concaténation)
@@ -215,6 +218,15 @@ _GO_DYNAMIC_RULES: dict[str, tuple] = {
     "http.Redirect": ("NIA-GO-REDIRECT-001", "CWE-601", Severity.MEDIUM,
         "Redirection avec une URL construite dynamiquement — risque d'Open Redirect.",
         "Si l'URL de redirection vient d'une entrée utilisateur non validée, un attaquant peut rediriger vers un site malveillant."),
+    "regexp.Compile": ("NIA-GO-REGEXP-001", "CWE-1333", Severity.MEDIUM,
+        "Expression régulière construite dynamiquement — risque de ReDoS (déni de service par expression régulière).",
+        "Un pattern regex assemblé depuis une entrée non fiable peut contenir une construction pathologique qui bloque le programme (catastrophic backtracking)."),
+    "regexp.MustCompile": ("NIA-GO-REGEXP-001", "CWE-1333", Severity.MEDIUM,
+        "Expression régulière construite dynamiquement — risque de ReDoS (déni de service par expression régulière).",
+        "Un pattern regex assemblé depuis une entrée non fiable peut contenir une construction pathologique qui bloque le programme (catastrophic backtracking)."),
+    "exec.LookPath": ("NIA-GO-PATH-003", "CWE-427", Severity.HIGH,
+        "exec.LookPath() avec un nom de binaire construit dynamiquement — risque de détournement de PATH.",
+        "Si le nom du binaire vient d'une entrée non fiable, un attaquant pourrait faire exécuter un exécutable malveillant placé plus tôt dans le PATH."),
 }
 
 # Suffixes d'appel (le nom de la variable varie : db, tx, conn...)

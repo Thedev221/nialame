@@ -28,3 +28,18 @@ def test_no_change_on_clean_code():
 
 def test_empty_list_stays_empty():
     assert _sanitize_replacement_lines([]) == []
+
+
+def test_reapplies_base_indent_for_single_line():
+    lines = ["return eval(formula)"]
+    assert _sanitize_replacement_lines(lines, base_indent="    ") == ["    return eval(formula)"]
+
+
+def test_reapplies_base_indent_preserving_relative_structure():
+    lines = ["if True:", "    return 1"]
+    assert _sanitize_replacement_lines(lines, base_indent="    ") == ["    if True:", "        return 1"]
+
+
+def test_base_indent_not_applied_to_blank_lines():
+    lines = ["return 1", "", "return 2"]
+    assert _sanitize_replacement_lines(lines, base_indent="    ") == ["    return 1", "", "    return 2"]

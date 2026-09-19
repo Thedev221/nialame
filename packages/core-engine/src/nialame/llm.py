@@ -153,7 +153,10 @@ async def generate_patch_for_finding(
         raise LlmInvalidResponseError(
             "Le LLM n'a pas renvoyé 'replacement_lines' au format attendu (liste de chaînes)."
         )
-    replacement_lines = _sanitize_replacement_lines(replacement_lines)
+
+    base_indent_match = re.match(r"^(\s*)", original_snippet_lines[0]) if original_snippet_lines else None
+    base_indent = base_indent_match.group(1) if base_indent_match else ""
+    replacement_lines = _sanitize_replacement_lines(replacement_lines, base_indent)
     explanation = result.raw_json.get("explanation", "")
     if not isinstance(explanation, str):
         explanation = ""
@@ -182,15 +185,20 @@ async def generate_patch_for_finding(
 _MARKDOWN_FENCE_PATTERN = re.compile(r"^```[a-zA-Z]*$")
 
 
-def _sanitize_replacement_lines(lines: list[str]) -> list[str]:
+def _sanitize_replacement_lines(lines: list[str], base_indent: str = "") -> list[str]:
     """Nettoie les lignes renvoyées par le LLM avant validation AST.
 
     Corrige deux erreurs fréquentes des petits modèles :
     1. Balises Markdown parasites (```python / ```) laissées dans la
        sortie malgré la consigne "JSON strict, pas de backticks".
-    2. Indentation incohérente — textwrap.dedent() retire l'indentation
-       commune superflue, sans jamais en ajouter (donc sans risque de
-       casser du code déjà bien indenté).
+    2. Indentation incohérente — on retire d'abord toute indentation
+       commune superflue (textwrap.dedent), PUIS on réapplique
+       l'indentation d'origine (base_indent) attendue à cet
+       emplacement précis du fichier. Sans cette réapplication, une
+       ligne unique ramenée à zéro espace par dedent() casserait la
+       syntaxe si elle doit se trouver à l'intérieur d'un bloc
+       (fonction, if, etc.) — c'est exactement le bug observé en
+       conditions réelles avec un remplacement d'une seule ligne.
     """
     cleaned = [line for line in lines if not _MARKDOWN_FENCE_PATTERN.match(line.strip())]
 
@@ -199,4 +207,8 @@ def _sanitize_replacement_lines(lines: list[str]) -> list[str]:
 
     joined = "\n".join(cleaned)
     dedented = textwrap.dedent(joined)
-    return dedented.split("\n")
+
+    return [
+        base_indent + line if line.strip() else line
+        for line in dedented.split("\n")
+    ]

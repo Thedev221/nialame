@@ -7,21 +7,49 @@
   "engines": {
     "vscode": "^1.90.0"
   },
-  "categories": ["Linters", "Programming Languages", "Machine Learning"],
+  "categories": [
+    "Linters",
+    "Programming Languages",
+    "Machine Learning"
+  ],
   "activationEvents": [
     "onLanguage:python"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
-      { "command": "nialame.openChat", "title": "Nialame: Open Chat" },
-      { "command": "nialame.scanCurrentFile", "title": "Nialame: Scan Current File" },
-      { "command": "nialame.scanWorkspace", "title": "Nialame: Scan Workspace" },
-      { "command": "nialame.explainSelection", "title": "Nialame: Explain Selected Code" },
-      { "command": "nialame.explainError", "title": "Nialame: Explain Error" },
-      { "command": "nialame.fixFinding", "title": "Nialame: Fix Selected Finding" },
-      { "command": "nialame.reviewGitChanges", "title": "Nialame: Review Git Changes" },
-      { "command": "nialame.openSettings", "title": "Nialame: Open Settings" }
+      {
+        "command": "nialame.openChat",
+        "title": "Nialame: Open Chat"
+      },
+      {
+        "command": "nialame.scanCurrentFile",
+        "title": "Nialame: Scan Current File"
+      },
+      {
+        "command": "nialame.scanWorkspace",
+        "title": "Nialame: Scan Workspace"
+      },
+      {
+        "command": "nialame.explainSelection",
+        "title": "Nialame: Explain Selected Code"
+      },
+      {
+        "command": "nialame.explainError",
+        "title": "Nialame: Explain Error"
+      },
+      {
+        "command": "nialame.fixFinding",
+        "title": "Nialame: Fix Selected Finding"
+      },
+      {
+        "command": "nialame.reviewGitChanges",
+        "title": "Nialame: Review Git Changes"
+      },
+      {
+        "command": "nialame.openSettings",
+        "title": "Nialame: Open Settings"
+      }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -66,11 +94,14 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile",
-    "test": "node ./out/tests/runTests.js"
+    "test": "jest"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.90.0",
+    "jest": "^30.5.2",
+    "ts-jest": "^29.4.12",
     "typescript": "^5.5.0"
   }
 }
